@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body (USART2 Version)
+  * @brief          : Main program body (2 Channel ADC Version: IN1 & IN2)
   ******************************************************************************
   */
 /* USER CODE END Header */
@@ -13,14 +13,22 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
-UART_HandleTypeDef huart2; // 改用 USART2
-uint32_t rawValue; // <--- 移到這裡變成全域變數，方便 SWV 抓取波形
+UART_HandleTypeDef huart2;
+
+// --- 全域變數，供 SWV 示波器抓取波形 ---
+uint32_t val_ch1 = 0;
+uint32_t val_ch2 = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_USART2_UART_Init(void); // 改用 USART2 初始化
+static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
+
+/* USER CODE BEGIN PFP */
+int _write(int file, char *ptr, int len);
+uint32_t Read_ADC_Channel(ADC_HandleTypeDef* hadc, uint32_t channel);
+/* USER CODE END PFP */
 
 /**
   * @brief  The application entry point.
@@ -29,74 +37,43 @@ static void MX_ADC1_Init(void);
 int main(void)
 {
   /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
-
-  /* Configure the system clock */
   SystemClock_Config();
-
-  /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART2_UART_Init(); // 初始化 USART2
+  MX_USART2_UART_Init();
   MX_ADC1_Init();
-
-  /* USER CODE BEGIN 2 */
-  /* USER CODE END 2 */
 
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    // --- 步驟 A: 啟動 ADC 並讀取數值 ---
-    HAL_ADC_Start(&hadc1);
+    // --- 步驟 A: 依序讀取 IN1 與 IN2 通道 ---
+    // 對應到您的硬體：IN1 = PA0(孔位 A0), IN2 = PA1(孔位 A1)
+    val_ch1 = Read_ADC_Channel(&hadc1, ADC_CHANNEL_1);
+    val_ch2 = Read_ADC_Channel(&hadc1, ADC_CHANNEL_2); // <--- 改成 CHANNEL_2 了！
 
-    // 等待轉換完成
-    if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-    {
-        char msg[32];
+    // --- 步驟 B: 打包成文字格式 (數值1,數值2) ---
+    char msg[64];
+    sprintf(msg, "%lu,%lu\r\n", (unsigned long)val_ch1, (unsigned long)val_ch2);
 
-        // 讀取 ADC 數值
-        // rawValue 已經是全域變數了，不需要在這裡宣告
-        rawValue = HAL_ADC_GetValue(&hadc1);
+    // 同步印到 Console (這會呼叫我們寫的 _write)
+    printf("%s", msg);
 
-        //print rawValue
-        printf("%lu\r\n", (unsigned long)rawValue);
-
-        // --- 步驟 B: 將數值轉成文字格式 ---
-        sprintf(msg, "%lu\r\n", (unsigned long)rawValue);
-
-
-
-        // --- 步驟 C: 透過 USB (現在是 USART2) 傳送 ---
-        // 注意這裡變成 &huart2
-        HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 10);
-    }
-
-    // --- 步驟 D: 取樣率控制 ---
+    // --- 步驟 C: 取樣率控制 (約 100Hz) ---
     HAL_Delay(10);
-
     /* USER CODE END WHILE */
   }
-  /* USER CODE BEGIN 3 */
-  /* USER CODE END 3 */
 }
 
 /**
   * @brief System Clock Configuration
-  * @retval None
   */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Configure the main internal regulator output voltage
-  */
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
@@ -112,8 +89,6 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
@@ -129,16 +104,11 @@ void SystemClock_Config(void)
 
 /**
   * @brief ADC1 Initialization Function
-  * @param None
-  * @retval None
   */
 static void MX_ADC1_Init(void)
 {
   ADC_MultiModeTypeDef multimode = {0};
-  ADC_ChannelConfTypeDef sConfig = {0};
 
-  /** Common config
-  */
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
@@ -159,23 +129,8 @@ static void MX_ADC1_Init(void)
     Error_Handler();
   }
 
-  /** Configure the ADC multi-mode
-  */
   multimode.Mode = ADC_MODE_INDEPENDENT;
   if (HAL_ADCEx_MultiModeConfigChannel(&hadc1, &multimode) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_1;
-  sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
-  sConfig.SingleDiff = ADC_SINGLE_ENDED;
-  sConfig.OffsetNumber = ADC_OFFSET_NONE;
-  sConfig.Offset = 0;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -183,8 +138,6 @@ static void MX_ADC1_Init(void)
 
 /**
   * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
   */
 static void MX_USART2_UART_Init(void)
 {
@@ -204,27 +157,51 @@ static void MX_USART2_UART_Init(void)
   }
 }
 
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
 static void MX_GPIO_Init(void)
 {
-  /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
 }
 
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+/* USER CODE BEGIN 4 */
+// 動態切換通道並讀取 ADC
+uint32_t Read_ADC_Channel(ADC_HandleTypeDef* hadc, uint32_t channel)
+{
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  sConfig.Channel = channel;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+
+  if (HAL_ADC_ConfigChannel(hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  HAL_ADC_Start(hadc);
+  HAL_ADC_PollForConversion(hadc, 10);
+
+  return HAL_ADC_GetValue(hadc);
+}
+
+// 攔截 C 語言底層的 _write 函式，將 printf 的內容透過 USART2 傳送
+int _write(int file, char *ptr, int len)
+{
+  HAL_UART_Transmit(&huart2, (uint8_t *)ptr, len, 10);
+  return len;
+}
+
+// 解決 undefined reference to `BSP_PB_IRQHandler' 錯誤
+void BSP_PB_IRQHandler(Button_TypeDef Button)
+{
+    // 不需實作
+}
+/* USER CODE END 4 */
+
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
   __disable_irq();
-  while (1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
+  while (1) { }
 }
