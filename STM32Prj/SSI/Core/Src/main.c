@@ -49,7 +49,7 @@ int main(void)
     // --- 步驟 A: 依序讀取 IN1 與 IN2 通道 ---
     // 對應到您的硬體：IN1 = PA0(孔位 A0), IN2 = PA1(孔位 A1)
     val_ch1 = Read_ADC_Channel(&hadc1, ADC_CHANNEL_1);
-    val_ch2 = Read_ADC_Channel(&hadc1, ADC_CHANNEL_2); // <--- 改成 CHANNEL_2 了！
+    val_ch2 = Read_ADC_Channel(&hadc1, ADC_CHANNEL_5); // <--- 改成 CHANNEL_5！
 
     // --- 步驟 B: 打包成文字格式 (數值1,數值2) ---
     char msg[64];
@@ -59,7 +59,7 @@ int main(void)
     printf("%s", msg);
 
     // --- 步驟 C: 取樣率控制 (約 100Hz) ---
-    HAL_Delay(10);
+    HAL_Delay(2);
     /* USER CODE END WHILE */
   }
 }

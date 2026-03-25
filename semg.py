@@ -189,6 +189,7 @@ class EMGGUIApp:
                 try:
                     if self.ser.in_waiting > 0:
                         raw_line = self.ser.readline()
+                        print(raw_line)
                         
                         if self.is_recording:
                             line = raw_line.decode('utf-8', errors='ignore').strip()
@@ -198,6 +199,7 @@ class EMGGUIApp:
                             if len(parts) == self.num_channels:
                                 try:
                                     vals = [int(p) for p in parts]
+                                    print('recive:', vals)
                                     timestamp = time.time()
                                     self.data_queue.put(vals)
                                     # 將 [時間, ch1, ch2, 標籤] 存入 log
