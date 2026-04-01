@@ -1,0 +1,4 @@
+2026-03-25 23:07:29,165 [ERROR] LogOutputStream:75 - [STDERR_REDIRECT] 23:07:28.967 ERROR Chromium process exit code: 133
+2026-03-25 23:07:29,228 [ERROR] LogOutputStream:75 - [STDERR_REDIRECT] 
+2026-03-25 23:07:29,322 [ERROR] LogOutputStream:75 - [STDERR_REDIRECT] 23:07:29.311 ERROR Crash dump dir: /Users/leon/Library/Application Support/JxBrowser/7.41.4/CrashReports
+2026-03-25 23:07:29,328 [ERROR] LogOutputStream:75 - [STDERR_REDIRECT] 
