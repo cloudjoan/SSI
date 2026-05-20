@@ -630,8 +630,8 @@ int main(void)
     // --- 步驟 D: 取樣率控制 (約 500Hz) ---
     // HAL_Delay(2) 代表延遲 2 毫秒，1000ms / 2ms = 500Hz
     // 注意：濾波器係數是基於 500Hz 設計的，請保持此延遲時間以確保濾波頻率準確在 60Hz
-    HAL_Delay(2);
- 800078c:	2002      	movs	r0, #2
+    HAL_Delay(1);
+ 800078c:	2001      	movs	r0, #1
  800078e:	f000 fbaf 	bl	8000ef0 <HAL_Delay>
   {
  8000792:	e790      	b.n	80006b6 <main+0x1a>
@@ -878,9 +878,9 @@ static void MX_USART2_UART_Init(void)
  800090c:	4b14      	ldr	r3, [pc, #80]	@ (8000960 <MX_USART2_UART_Init+0x58>)
  800090e:	4a15      	ldr	r2, [pc, #84]	@ (8000964 <MX_USART2_UART_Init+0x5c>)
  8000910:	601a      	str	r2, [r3, #0]
-  huart2.Init.BaudRate = 115200;
+  huart2.Init.BaudRate = 921600;
  8000912:	4b13      	ldr	r3, [pc, #76]	@ (8000960 <MX_USART2_UART_Init+0x58>)
- 8000914:	f44f 32e1 	mov.w	r2, #115200	@ 0x1c200
+ 8000914:	f44f 2261 	mov.w	r2, #921600	@ 0xe1000
  8000918:	605a      	str	r2, [r3, #4]
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
  800091a:	4b11      	ldr	r3, [pc, #68]	@ (8000960 <MX_USART2_UART_Init+0x58>)
@@ -1313,7 +1313,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
  8000b94:	681b      	ldr	r3, [r3, #0]
  8000b96:	4a1f      	ldr	r2, [pc, #124]	@ (8000c14 <HAL_UART_MspInit+0xa8>)
  8000b98:	4293      	cmp	r3, r2
- 8000b9a:	d137      	bne.n	8000c0c <HAL_UART_MspInit+0xa0>
+ 8000b9a:	d136      	bne.n	8000c0a <HAL_UART_MspInit+0x9e>
 
     /* USER CODE END USART2_MspInit 0 */
 
@@ -1362,40 +1362,40 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
  8000be4:	60bb      	str	r3, [r7, #8]
  8000be6:	68bb      	ldr	r3, [r7, #8]
     /**USART2 GPIO Configuration
-    PA1     ------> USART2_DE
     PA2     ------> USART2_TX
-    PA15     ------> USART2_RX
+    PA3     ------> USART2_RX
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_15;
- 8000be8:	f248 0306 	movw	r3, #32774	@ 0x8006
- 8000bec:	657b      	str	r3, [r7, #84]	@ 0x54
+    GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
+ 8000be8:	230c      	movs	r3, #12
+ 8000bea:	657b      	str	r3, [r7, #84]	@ 0x54
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
- 8000bee:	2302      	movs	r3, #2
- 8000bf0:	65bb      	str	r3, [r7, #88]	@ 0x58
+ 8000bec:	2302      	movs	r3, #2
+ 8000bee:	65bb      	str	r3, [r7, #88]	@ 0x58
     GPIO_InitStruct.Pull = GPIO_NOPULL;
- 8000bf2:	2300      	movs	r3, #0
- 8000bf4:	65fb      	str	r3, [r7, #92]	@ 0x5c
+ 8000bf0:	2300      	movs	r3, #0
+ 8000bf2:	65fb      	str	r3, [r7, #92]	@ 0x5c
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
- 8000bf6:	2300      	movs	r3, #0
- 8000bf8:	663b      	str	r3, [r7, #96]	@ 0x60
+ 8000bf4:	2300      	movs	r3, #0
+ 8000bf6:	663b      	str	r3, [r7, #96]	@ 0x60
     GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
- 8000bfa:	2307      	movs	r3, #7
- 8000bfc:	667b      	str	r3, [r7, #100]	@ 0x64
+ 8000bf8:	2307      	movs	r3, #7
+ 8000bfa:	667b      	str	r3, [r7, #100]	@ 0x64
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
- 8000bfe:	f107 0354 	add.w	r3, r7, #84	@ 0x54
- 8000c02:	4619      	mov	r1, r3
- 8000c04:	f04f 4090 	mov.w	r0, #1207959552	@ 0x48000000
- 8000c08:	f001 fd0a 	bl	8002620 <HAL_GPIO_Init>
+ 8000bfc:	f107 0354 	add.w	r3, r7, #84	@ 0x54
+ 8000c00:	4619      	mov	r1, r3
+ 8000c02:	f04f 4090 	mov.w	r0, #1207959552	@ 0x48000000
+ 8000c06:	f001 fd0b 	bl	8002620 <HAL_GPIO_Init>
 
     /* USER CODE END USART2_MspInit 1 */
 
   }
 
 }
- 8000c0c:	bf00      	nop
- 8000c0e:	3768      	adds	r7, #104	@ 0x68
- 8000c10:	46bd      	mov	sp, r7
- 8000c12:	bd80      	pop	{r7, pc}
+ 8000c0a:	bf00      	nop
+ 8000c0c:	3768      	adds	r7, #104	@ 0x68
+ 8000c0e:	46bd      	mov	sp, r7
+ 8000c10:	bd80      	pop	{r7, pc}
+ 8000c12:	bf00      	nop
  8000c14:	40004400 	.word	0x40004400
  8000c18:	40021000 	.word	0x40021000
 

@@ -23,7 +23,7 @@ class EMGGUIApp:
         # --- 變數初始化 ---
         self.serial_port = None
         self.ser = None
-        self.baud_rate = 115200
+        self.baud_rate = 921600
         self.is_recording = False
         self.thread_running = True
         
