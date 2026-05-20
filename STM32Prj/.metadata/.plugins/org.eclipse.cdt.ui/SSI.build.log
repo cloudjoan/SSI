@@ -1,4 +1,4 @@
-16:28:36 **** Incremental Build of configuration Debug for project SSI ****
+16:10:18 **** Incremental Build of configuration Debug for project SSI ****
 make -j7 all 
 arm-none-eabi-size  SSI.elf 
    text	   data	    bss	    dec	    hex	filename
@@ -6,5 +6,5 @@ arm-none-eabi-size  SSI.elf
 Finished building: default.size.stdout
  
 
-16:28:36 Build Finished. 0 errors, 0 warnings. (took 408ms)
+16:10:18 Build Finished. 0 errors, 0 warnings. (took 307ms)
 
