@@ -17,6 +17,7 @@ import joblib
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 
+# 解決 Matplotlib 中文顯示
 plt.rcParams['font.sans-serif'] = ['PingFang TC', 'Arial Unicode MS', 'Microsoft JhengHei']
 plt.rcParams['axes.unicode_minus'] = False 
 
@@ -27,8 +28,8 @@ class EMGGUIApp:
         self.root.geometry(f"{self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}+0+0")
         
         self.ser = None
-        self.baud_rate = 115200 
-        self.is_recording = False
+        self.baud_rate = 921600 # 🚀 同步升級高速傳輸
+        self.is_recording = False # 控制是否畫圖與預測
         self.thread_running = True
         
         self.data_queue = queue.Queue()
@@ -40,7 +41,7 @@ class EMGGUIApp:
         self.window_size = 250 
         self.last_predict_time = time.time() 
 
-        # 這裡的模型格式改為儲存 keras model
+        # CNN 模型格式 (Keras)
         self.models = {
             'ch1': {'active': False, 'model': None, 'scaler': None, 'le': None, 'name': ''},
             'ch2': {'active': False, 'model': None, 'scaler': None, 'le': None, 'name': ''}
@@ -58,7 +59,7 @@ class EMGGUIApp:
         self.root.after(500, self.connect_serial)
 
     def scan_available_models(self):
-        # 注意這裡尋找的是 .h5 的 CNN 模型
+        # 尋找 CNN 的 .h5 檔案
         model_files = glob.glob(os.path.join("pkl", "emg_cnn_model_*.h5"))
         muscle_names = ["-- 停用此通道 --"] 
         for file in model_files:
@@ -74,13 +75,13 @@ class EMGGUIApp:
             return
 
         muscle = selected.lower() 
-        model_path = os.path.join("pkl", f"emg_cnn_model_{muscle}.h5") # CNN model
+        model_path = os.path.join("pkl", f"emg_cnn_model_{muscle}.h5")
         scaler_path = os.path.join("pkl", f"emg_scaler_{muscle}.pkl")
         encoder_path = os.path.join("pkl", f"emg_label_encoder_{muscle}.pkl")
 
         try:
             if os.path.exists(model_path):
-                # 使用 Keras 載入神經網路模型
+                print(f"⏳ 正在載入 {selected} 的 CNN 模型，請稍候...")
                 self.models[channel_key]['model'] = load_model(model_path)
                 self.models[channel_key]['scaler'] = joblib.load(scaler_path)
                 self.models[channel_key]['le'] = joblib.load(encoder_path)
@@ -93,6 +94,7 @@ class EMGGUIApp:
         except Exception as e:
             self.models[channel_key]['active'] = False
             print(f"載入 CNN 錯誤: {e}")
+            messagebox.showerror("載入失敗", f"模型載入發生異常:\n{e}")
             
         self.update_predict_label()
 
@@ -120,7 +122,7 @@ class EMGGUIApp:
         self.entry_label = tk.Entry(row1_frame, width=10)
         self.entry_label.pack(side=tk.LEFT, padx=5)
         
-        self.btn_start = tk.Button(row1_frame, text="▶ 錄製", command=self.start_recording)
+        self.btn_start = tk.Button(row1_frame, text="▶ 開始預測", command=self.start_recording)
         self.btn_start.pack(side=tk.LEFT, padx=5)
         self.btn_stop = tk.Button(row1_frame, text="■ 停止", state=tk.DISABLED, command=self.stop_recording)
         self.btn_stop.pack(side=tk.LEFT, padx=5)
@@ -163,15 +165,26 @@ class EMGGUIApp:
     def connect_serial(self):
         try:
             ports = [p.device for p in serial.tools.list_ports.comports() if 'usbmodem' in p.device]
-            port = ports[0] if ports else '/dev/tty.usbmodem1103'
+            if not ports:
+                print("❌ 錯誤：找不到 usbmodem 裝置")
+                return
+            port = ports[0]
             self.ser = serial.Serial(port, self.baud_rate, timeout=1)
-        except Exception:
-            pass
+            self.ser.reset_input_buffer()
+            print(f"🔌 Serial 已連接: {self.ser.name}")
+        except Exception as e:
+            print(f"⚠️ 無法自動連接 Serial: {e}")
 
     def start_recording(self):
-        lbl = self.entry_label.get().strip()
-        if not lbl: return messagebox.showwarning("警告", "請輸入標籤")
-        self.current_label = lbl
+        # 💡 開始前清空暫存，確保圖表從頭畫起
+        for i in range(self.num_channels):
+            self.y_data[i].clear()
+            self.lines[i].set_data([], [])
+        while not self.data_queue.empty():
+            self.data_queue.get()
+        if self.ser:
+            self.ser.reset_input_buffer()
+
         self.is_recording = True
         self.btn_start.config(state=tk.DISABLED)
         self.btn_stop.config(state=tk.NORMAL)
@@ -180,75 +193,99 @@ class EMGGUIApp:
         self.is_recording = False
         self.btn_start.config(state=tk.NORMAL)
         self.btn_stop.config(state=tk.DISABLED)
+        self.update_predict_label()
 
     def read_serial_task(self):
         while self.thread_running:
             if self.ser and self.ser.is_open and self.ser.in_waiting > 0:
                 try:
                     line = self.ser.readline().decode('utf-8', errors='ignore').strip()
-                    parts = line.split(',')
-                    if len(parts) == 2:
-                        self.data_queue.put([int(p) for p in parts])
-                except: pass
+                    
+                    # 🚀 只在按下開始後收集資料
+                    if self.is_recording:
+                        parts = line.split(',')
+                        # 🚀 防呆機制：相容 4 通道資料
+                        if len(parts) >= 2: 
+                            try:
+                                self.data_queue.put([int(parts[0]), int(parts[1])])
+                            except ValueError:
+                                pass
+                except Exception as e: 
+                    pass 
             else: time.sleep(0.01)
 
     def update_plot(self):
-        updated = False
-        while not self.data_queue.empty():
-            vals = self.data_queue.get()
-            for i in range(2):
-                self.y_data[i].append(vals[i])
-                if len(self.y_data[i]) > 600: self.y_data[i].pop(0)
-            updated = True
-        
-        if updated and len(self.y_data[0]) > 0:
-            for i in range(2):
-                y_disp = self.y_data[i][-500:]
-                self.lines[i].set_data(range(len(y_disp)), y_disp)
-            self.canvas.draw_idle()  
+        # 🚀 只在按下開始後進行圖表更新與 CNN 預測
+        if self.is_recording:
+            updated = False
+            while not self.data_queue.empty():
+                vals = self.data_queue.get()
+                for i in range(2):
+                    self.y_data[i].append(vals[i])
+                    if len(self.y_data[i]) > 600: self.y_data[i].pop(0)
+                updated = True
             
-            # --- 🚀 CNN 決策融合推論邏輯 ---
-            current_time = time.time()
-            if len(self.y_data[0]) >= self.window_size and (current_time - self.last_predict_time > 0.2):
+            if updated and len(self.y_data[0]) > 0:
+                for i in range(2):
+                    y_disp = self.y_data[i][-500:]
+                    self.lines[i].set_data(range(len(y_disp)), y_disp)
+                self.canvas.draw_idle()  
                 
-                predictions = [] 
-
-                # 處理 Ch1 CNN 預測
-                if self.models['ch1']['active']:
-                    win = np.array(self.y_data[0][-self.window_size:]).reshape(-1, 1)
-                    scaled = self.models['ch1']['scaler'].transform(win) # (250, 1)
-                    # Keras model predict expects batch dimension: (1, 250, 1)
-                    cnn_input = np.expand_dims(scaled, axis=0)
-                    probs = self.models['ch1']['model'].predict(cnn_input, verbose=0)[0]
-                    best_idx = np.argmax(probs)
-                    pred_text = self.models['ch1']['le'].inverse_transform([best_idx])[0]
-                    confidence = probs[best_idx] * 100
-                    predictions.append({'channel': 'Ch1', 'text': pred_text, 'conf': confidence})
-
-                # 處理 Ch2 CNN 預測
-                if self.models['ch2']['active']:
-                    win = np.array(self.y_data[1][-self.window_size:]).reshape(-1, 1)
-                    scaled = self.models['ch2']['scaler'].transform(win)
-                    cnn_input = np.expand_dims(scaled, axis=0)
-                    probs = self.models['ch2']['model'].predict(cnn_input, verbose=0)[0]
-                    best_idx = np.argmax(probs)
-                    pred_text = self.models['ch2']['le'].inverse_transform([best_idx])[0]
-                    confidence = probs[best_idx] * 100
-                    predictions.append({'channel': 'Ch2', 'text': pred_text, 'conf': confidence})
-
-                # 融合決策：找出信心度最高的那個答案
-                if predictions:
-                    predictions.sort(key=lambda x: x['conf'], reverse=True)
-                    best_pred = predictions[0]
+                # --- 🚀 CNN 決策融合推論邏輯 ---
+                current_time = time.time()
+                if len(self.y_data[0]) >= self.window_size and (current_time - self.last_predict_time > 0.2):
                     
-                    if len(predictions) == 2:
-                        ui_text = f"CNN融合判定: 【 {best_pred['text']} 】 (採信 {best_pred['channel']} 信心: {best_pred['conf']:.0f}%)"
-                        self.lbl_predict.config(text=ui_text, bg="#e8f5e9", fg="#2e7d32")
-                    else:
-                        ui_text = f"CNN單一判定: 【 {best_pred['text']} 】 (信心: {best_pred['conf']:.0f}%)"
-                        self.lbl_predict.config(text=ui_text, bg="#e3f2fd", fg="#1565c0")
-                        
-                self.last_predict_time = current_time
+                    predictions = [] 
+                    
+                    try:
+                        # 處理 Ch1 CNN 預測
+                        if self.models['ch1']['active']:
+                            # CNN 吃的維度是 (samples, time_steps, features)
+                            # 這裡把 250 個點轉成 (250, 1) 給 scaler，再轉成 (1, 250, 1) 給 CNN
+                            win = np.array(self.y_data[0][-self.window_size:]).reshape(-1, 1)
+                            scaled = self.models['ch1']['scaler'].transform(win) 
+                            cnn_input = np.expand_dims(scaled, axis=0) 
+                            
+                            probs = self.models['ch1']['model'].predict(cnn_input, verbose=0)[0]
+                            best_idx = np.argmax(probs)
+                            pred_text = self.models['ch1']['le'].inverse_transform([best_idx])[0]
+                            confidence = probs[best_idx] * 100
+                            predictions.append({'channel': 'Ch1', 'text': pred_text, 'conf': confidence})
+
+                        # 處理 Ch2 CNN 預測
+                        if self.models['ch2']['active']:
+                            win = np.array(self.y_data[1][-self.window_size:]).reshape(-1, 1)
+                            scaled = self.models['ch2']['scaler'].transform(win)
+                            cnn_input = np.expand_dims(scaled, axis=0)
+                            
+                            probs = self.models['ch2']['model'].predict(cnn_input, verbose=0)[0]
+                            best_idx = np.argmax(probs)
+                            pred_text = self.models['ch2']['le'].inverse_transform([best_idx])[0]
+                            confidence = probs[best_idx] * 100
+                            predictions.append({'channel': 'Ch2', 'text': pred_text, 'conf': confidence})
+
+                        # 融合決策：找出信心度最高的那個答案
+                        if predictions:
+                            predictions.sort(key=lambda x: x['conf'], reverse=True)
+                            best_pred = predictions[0]
+                            
+                            if len(predictions) == 2:
+                                ui_text = f"CNN 雙核判定: 【 {best_pred['text']} 】 (採信 {best_pred['channel']} 信心: {best_pred['conf']:.0f}%)"
+                                self.lbl_predict.config(text=ui_text, bg="#e8f5e9", fg="#2e7d32")
+                            else:
+                                ui_text = f"CNN 單核判定: 【 {best_pred['text']} 】 (信心: {best_pred['conf']:.0f}%)"
+                                self.lbl_predict.config(text=ui_text, bg="#e3f2fd", fg="#1565c0")
+                                
+                    except ValueError as ve:
+                        # 🚀 把被隱藏的維度錯誤顯示在介面上
+                        print(f"⚠️ CNN 預測維度錯誤: {ve}")
+                        self.lbl_predict.config(text="CNN 錯誤：資料維度不符！請重跑訓練程式", bg="red", fg="white")
+                    except Exception as e:
+                        # 🚀 把其他所有被隱藏的錯誤也顯示出來
+                        print(f"⚠️ CNN 未知錯誤: {e}")
+                        self.lbl_predict.config(text=f"CNN 錯誤: {str(e)[:25]}", bg="red", fg="white")
+
+                    self.last_predict_time = current_time
 
         if self.thread_running:
             self.root.after(15, self.update_plot)

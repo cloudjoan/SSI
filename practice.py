@@ -26,7 +26,7 @@ class EMGGUIApp:
         self.root.geometry(f"{self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}+0+0")
         
         self.ser = None
-        self.baud_rate = 115200 
+        self.baud_rate = 921600 # 🚀 關鍵修改：配合 STM32 的真實高速傳輸速率
         self.is_recording = False
         self.thread_running = True
         
@@ -40,6 +40,7 @@ class EMGGUIApp:
         self.window_size = 250 
         self.last_predict_time = time.time() 
 
+        # 這裡存放兩個通道獨立的大腦模型
         self.models = {
             'ch1': {'active': False, 'model': None, 'scaler': None, 'le': None, 'name': ''},
             'ch2': {'active': False, 'model': None, 'scaler': None, 'le': None, 'name': ''}
@@ -54,9 +55,12 @@ class EMGGUIApp:
         
         self.update_plot()
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # 延遲 0.5 秒後嘗試自動連線 (確保 GUI 先畫完)
         self.root.after(500, self.connect_serial)
 
     def scan_available_models(self):
+        """ 掃描 pkl/ 資料夾中所有可用的單一肌肉模型 """
         model_files = glob.glob(os.path.join("pkl", "emg_model_*.pkl"))
         muscle_names = ["-- 停用此通道 --"] # 第一個選項是停用
         for file in model_files:
@@ -65,6 +69,7 @@ class EMGGUIApp:
         return muscle_names
 
     def assign_model(self, channel_key, combobox_widget):
+        """ 當使用者在下拉選單選擇部位時，載入對應的模型 """
         selected = combobox_widget.get()
         if not selected or selected == "-- 停用此通道 --":
             self.models[channel_key]['active'] = False
@@ -94,6 +99,7 @@ class EMGGUIApp:
         self.update_predict_label()
 
     def update_predict_label(self):
+        """ 更新畫面上方的狀態文字 """
         ch1_act = self.models['ch1']['active']
         ch2_act = self.models['ch2']['active']
         if ch1_act and ch2_act:
@@ -163,15 +169,32 @@ class EMGGUIApp:
     def connect_serial(self):
         try:
             ports = [p.device for p in serial.tools.list_ports.comports() if 'usbmodem' in p.device]
-            port = ports[0] if ports else '/dev/tty.usbmodem1103'
+            if not ports:
+                print("❌ 錯誤：找不到 usbmodem 裝置")
+                return
+            port = ports[0]
             self.ser = serial.Serial(port, self.baud_rate, timeout=1)
-        except Exception:
-            pass
+            # 清空緩衝區
+            self.ser.reset_input_buffer()
+            print(f"🔌 Serial 已連接: {self.ser.name}")
+        except Exception as e:
+            print(f"⚠️ 無法自動連接 Serial: {e}")
 
     def start_recording(self):
-        lbl = self.entry_label.get().strip()
-        if not lbl: return messagebox.showwarning("警告", "請輸入標籤")
-        self.current_label = lbl
+        # 💡 取消標籤檢查，因為現在主要是用來啟動預測
+        # lbl = self.entry_label.get().strip()
+        # if not lbl: return messagebox.showwarning("警告", "請輸入標籤")
+        # self.current_label = lbl
+        
+        # 💡 在開始前清空舊的暫存資料，確保圖表從 0 開始畫
+        for i in range(self.num_channels):
+            self.y_data[i].clear()
+            self.lines[i].set_data([], [])
+        while not self.data_queue.empty():
+            self.data_queue.get()
+        if self.ser:
+            self.ser.reset_input_buffer()
+
         self.is_recording = True
         self.btn_start.config(state=tk.DISABLED)
         self.btn_stop.config(state=tk.NORMAL)
@@ -180,8 +203,13 @@ class EMGGUIApp:
         self.is_recording = False
         self.btn_start.config(state=tk.NORMAL)
         self.btn_stop.config(state=tk.DISABLED)
+        # 💡 停止時將狀態標籤歸零
+        self.update_predict_label()
 
     def extract_features(self, channel_data):
+        # 🚀 關鍵修復：把 Python 基礎的 list 轉成 NumPy 陣列，才能進行平方運算！
+        channel_data = np.array(channel_data)
+        
         mav = np.mean(np.abs(channel_data))
         wl = np.sum(np.abs(np.diff(channel_data)))
         rms = np.sqrt(np.mean(channel_data**2))
@@ -193,69 +221,83 @@ class EMGGUIApp:
             if self.ser and self.ser.is_open and self.ser.in_waiting > 0:
                 try:
                     line = self.ser.readline().decode('utf-8', errors='ignore').strip()
-                    parts = line.split(',')
-                    if len(parts) == 2:
-                        self.data_queue.put([int(p) for p in parts])
-                except: pass
+                    
+                    # 🚀 關鍵修改：只有在 is_recording (按鈕按下) 時，才把資料放進 Queue 去畫圖！
+                    if self.is_recording:
+                        parts = line.split(',')
+                        if len(parts) >= 2: 
+                            self.data_queue.put([int(parts[0]), int(parts[1])])
+                except Exception as e: 
+                    pass # 忽略雜訊
             else: time.sleep(0.01)
 
     def update_plot(self):
-        updated = False
-        while not self.data_queue.empty():
-            vals = self.data_queue.get()
-            for i in range(2):
-                self.y_data[i].append(vals[i])
-                if len(self.y_data[i]) > 600: self.y_data[i].pop(0)
-            updated = True
-        
-        if updated and len(self.y_data[0]) > 0:
-            for i in range(2):
-                y_disp = self.y_data[i][-500:]
-                self.lines[i].set_data(range(len(y_disp)), y_disp)
-            self.canvas.draw_idle()  
+        # 🚀 關鍵修改：只有在 is_recording (按鈕按下) 時，才進行圖表更新與 AI 預測！
+        if self.is_recording:
+            updated = False
+            while not self.data_queue.empty():
+                vals = self.data_queue.get()
+                for i in range(2):
+                    self.y_data[i].append(vals[i])
+                    if len(self.y_data[i]) > 600: self.y_data[i].pop(0)
+                updated = True
             
-            # --- 🚀 決策融合推論邏輯 (Decision Fusion) ---
-            current_time = time.time()
-            if len(self.y_data[0]) >= self.window_size and (current_time - self.last_predict_time > 0.2):
+            if updated and len(self.y_data[0]) > 0:
+                for i in range(2):
+                    y_disp = self.y_data[i][-500:]
+                    self.lines[i].set_data(range(len(y_disp)), y_disp)
+                self.canvas.draw_idle()  
                 
-                predictions = [] # 用來收集各通道的預測結果
-
-                # 處理 Ch1 預測
-                if self.models['ch1']['active']:
-                    win = self.y_data[0][-self.window_size:]
-                    feats = self.extract_features(win)
-                    scaled = self.models['ch1']['scaler'].transform([feats])
-                    probs = self.models['ch1']['model'].predict_proba(scaled)[0]
-                    best_idx = np.argmax(probs)
-                    pred_text = self.models['ch1']['le'].inverse_transform([best_idx])[0]
-                    confidence = probs[best_idx] * 100
-                    predictions.append({'channel': 'Ch1', 'text': pred_text, 'conf': confidence})
-
-                # 處理 Ch2 預測
-                if self.models['ch2']['active']:
-                    win = self.y_data[1][-self.window_size:]
-                    feats = self.extract_features(win)
-                    scaled = self.models['ch2']['scaler'].transform([feats])
-                    probs = self.models['ch2']['model'].predict_proba(scaled)[0]
-                    best_idx = np.argmax(probs)
-                    pred_text = self.models['ch2']['le'].inverse_transform([best_idx])[0]
-                    confidence = probs[best_idx] * 100
-                    predictions.append({'channel': 'Ch2', 'text': pred_text, 'conf': confidence})
-
-                # 融合決策：找出信心度最高的那個答案
-                if predictions:
-                    # 依據信心度 (conf) 由大到小排序
-                    predictions.sort(key=lambda x: x['conf'], reverse=True)
-                    best_pred = predictions[0]
+                # --- 🚀 決策融合推論邏輯 (Decision Fusion) ---
+                current_time = time.time()
+                if len(self.y_data[0]) >= self.window_size and (current_time - self.last_predict_time > 0.2):
                     
-                    if len(predictions) == 2:
-                        ui_text = f"融合判定: 【 {best_pred['text']} 】 (採信 {best_pred['channel']} 信心: {best_pred['conf']:.0f}%)"
-                        self.lbl_predict.config(text=ui_text, bg="#e8f5e9", fg="#2e7d32")
-                    else:
-                        ui_text = f"單一判定: 【 {best_pred['text']} 】 (信心: {best_pred['conf']:.0f}%)"
-                        self.lbl_predict.config(text=ui_text, bg="#e3f2fd", fg="#1565c0")
-                        
-                self.last_predict_time = current_time
+                    predictions = [] # 用來收集各通道的預測結果
+                    
+                    # 💡 加入 try-except 防護罩，避免少數特徵錯誤導致介面當機卡死
+                    try:
+                        # 處理 Ch1 預測
+                        if self.models['ch1']['active']:
+                            win = self.y_data[0][-self.window_size:]
+                            feats = self.extract_features(win)
+                            scaled = self.models['ch1']['scaler'].transform([feats])
+                            probs = self.models['ch1']['model'].predict_proba(scaled)[0]
+                            best_idx = np.argmax(probs)
+                            pred_text = self.models['ch1']['le'].inverse_transform([best_idx])[0]
+                            confidence = probs[best_idx] * 100
+                            predictions.append({'channel': 'Ch1', 'text': pred_text, 'conf': confidence})
+
+                        if self.models['ch2']['active']:
+                            win = self.y_data[1][-self.window_size:]
+                            feats = self.extract_features(win)
+                            scaled = self.models['ch2']['scaler'].transform([feats])
+                            probs = self.models['ch2']['model'].predict_proba(scaled)[0]
+                            best_idx = np.argmax(probs)
+                            pred_text = self.models['ch2']['le'].inverse_transform([best_idx])[0]
+                            confidence = probs[best_idx] * 100
+                            predictions.append({'channel': 'Ch2', 'text': pred_text, 'conf': confidence})
+
+                        if predictions:
+                            predictions.sort(key=lambda x: x['conf'], reverse=True)
+                            best_pred = predictions[0]
+                            
+                            if len(predictions) == 2:
+                                ui_text = f"融合判定: 【 {best_pred['text']} 】 (採信 {best_pred['channel']} 信心: {best_pred['conf']:.0f}%)"
+                                self.lbl_predict.config(text=ui_text, bg="#e8f5e9", fg="#2e7d32")
+                            else:
+                                ui_text = f"單一判定: 【 {best_pred['text']} 】 (信心: {best_pred['conf']:.0f}%)"
+                                self.lbl_predict.config(text=ui_text, bg="#e3f2fd", fg="#1565c0")
+
+                    except ValueError as ve:
+                        # 🚀 把被隱藏的錯誤顯示在介面上
+                        print(f"⚠️ 預測維度錯誤: {ve}")
+                        self.lbl_predict.config(text="錯誤：特徵數量不相符！請重跑訓練程式", bg="red", fg="white")
+                    except Exception as e:
+                        # 🚀 把其他所有被隱藏的錯誤也顯示出來
+                        print(f"⚠️ 預測未知錯誤: {e}")
+                        self.lbl_predict.config(text=f"AI 錯誤: {str(e)[:20]}", bg="red", fg="white")
+                            
+                    self.last_predict_time = current_time
 
         if self.thread_running:
             self.root.after(15, self.update_plot)
