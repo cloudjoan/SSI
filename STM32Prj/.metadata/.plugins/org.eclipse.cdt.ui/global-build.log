@@ -1224,3 +1224,31 @@ arm-none-eabi-size  SSI.elf
   22264	    124	   2188	  24576	   6000	SSI.elf
 Finished building: default.size.stdout
  
+20:07:42 **** Incremental Build of configuration Debug for project SSI ****
+make -j7 all 
+arm-none-eabi-size  SSI.elf 
+   text	   data	    bss	    dec	    hex	filename
+  22264	    124	   2188	  24576	   6000	SSI.elf
+Finished building: default.size.stdout
+ 
+20:08:20 **** Incremental Build of configuration Debug for project SSI ****
+make -j7 all 
+arm-none-eabi-size  SSI.elf 
+   text	   data	    bss	    dec	    hex	filename
+  22264	    124	   2188	  24576	   6000	SSI.elf
+Finished building: default.size.stdout
+ 
+21:30:39 **** Incremental Build of configuration Debug for project SSI ****
+make -j7 all 
+arm-none-eabi-size  SSI.elf 
+   text	   data	    bss	    dec	    hex	filename
+  22264	    124	   2188	  24576	   6000	SSI.elf
+Finished building: default.size.stdout
+ 
+16:49:38 **** Incremental Build of configuration Debug for project SSI ****
+make -j7 all 
+arm-none-eabi-size  SSI.elf 
+   text	   data	    bss	    dec	    hex	filename
+  22264	    124	   2188	  24576	   6000	SSI.elf
+Finished building: default.size.stdout
+ 
