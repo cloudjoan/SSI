@@ -3061,3 +3061,16 @@ Command-line arguments:  -os macosx -ws cocoa -arch x86_64 -keyring /Users/leon/
 
 !ENTRY com.st.stm32cube.ide.mcu.debug.swv 1 1 2026-09-15 16:49:47.005
 !MESSAGE SWV configuration; base: 192000000; minDiv: 16; maxDiv: 65535; maxSWO: 12000000; limit: 12000000 => SWO: 12000000; CPU: 170000000; div: 14
+!SESSION 2026-09-18 04:17:23.190 -----------------------------------------------
+eclipse.buildId=Version 1.19.0
+java.version=21.0.3
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=macosx, ARCH=x86_64, WS=cocoa, NL=zh_TW_#Hant
+Framework arguments:  -keyring /Users/leon/.eclipse_keyring
+Command-line arguments:  -os macosx -ws cocoa -arch x86_64 -keyring /Users/leon/.eclipse_keyring
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2026-09-18 04:17:34.921
+!MESSAGE Log4j2 initialized with config file /Users/leon/VSCodeProject/SSI/STM32Prj/.metadata/.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2026-09-18 04:17:45.475
+!MESSAGE Started RMI Server, listening on port 41337
