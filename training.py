@@ -35,7 +35,7 @@ for root, dirs, files in os.walk(BASE_FOLDER):
         # 尋找 CSV 檔案
         csv_pattern = os.path.join(root, "*_emg_2ch_data.csv")
         csv_files = glob.glob(csv_pattern)
-        valid_files = [f for f in csv_files if not os.path.basename(f).startswith(("test", "QQ"))]
+        valid_files = [f for f in csv_files if not os.path.basename(f).startswith(("test"))]
         
         if not valid_files:
             continue
